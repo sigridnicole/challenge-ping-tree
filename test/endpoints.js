@@ -64,11 +64,25 @@ test.serial.cb('healthcheck', function (t) {
   })
 })
 
+test.serial.cb('REJECT TARGET - no targets in db | url: /route  method: post', function (t) {
+  const url = '/route'
+  const visitorInfo = {
+    geoState: 'ri',
+    publisher: 'abc',
+    timestamp: '2018-07-19T13:28:59.513Z'
+  }
+  servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
+    t.falsy(err, 'no error')
+    t.is(res.statusCode, 200, 'correct statusCode')
+    t.is(res.body.decision, 'reject', 'correct decision')
+    t.end()
+  }).end(JSON.stringify(visitorInfo))
+})
+
 test.serial.cb('POST A TARGET | url: /api/targets  method: post', function (t) {
   const url = '/api/targets'
-  const key = targetsDb.formatTargetKey(targetSample)
   servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
-    const check = JSON.parse(await targetsDb.getAsync(key))
+    const check = await targetsDb.getTarget(targetSample.id)
     t.falsy(err, 'no error')
     t.is(res.statusCode, 200, 'correct statusCode')
     t.assert(check.id === targetSample.id, 'added sample target to db')
@@ -78,15 +92,9 @@ test.serial.cb('POST A TARGET | url: /api/targets  method: post', function (t) {
 
 test.serial.cb('GET A TARGET BY ID | url: /api/targets/:id  method: get', function (t) {
   const url = '/api/target/1'
-  const key = targetsDb.formatTargetKey(targetSample)
-  targetsDb.setAsync(key, JSON.stringify(targetSample)).then(async () => {
-    const check = JSON.parse(await targetsDb.getAsync(key))
-    t.assert(check.id === targetSample.id, 'target sample is exsiting')
-  })
   servertest(server(), url, { encoding: 'json' }, async function (err, res) {
     t.falsy(err, 'no error')
-    t.truthy(res.body.target, 'return target exsisting')
-    t.is(res.body.target.id, '1', 'returned correct id')
+    t.deepEqual(res.body.target, targetSample, 'returned target')
     t.is(res.statusCode, 200, 'correct statusCode')
     t.end()
   })
@@ -96,11 +104,7 @@ test.serial.cb('GET ALL TARGETS | url: /api/targets  method: get', function (t) 
   const url = '/api/targets'
 
   multipleTargets.map(target => {
-    const key = targetsDb.formatTargetKey(target)
-    targetsDb.setAsync(key, JSON.stringify(target)).then(async () => {
-      const check = JSON.parse(await targetsDb.getAsync(key))
-      t.assert(check.id === target.id, 'target sample is exsiting')
-    })
+    servertest(server(), url, { encoding: 'json', method: 'POST' }).end(JSON.stringify(target))
   })
 
   servertest(server(), url, { encoding: 'json' }, async function (err, res) {
@@ -113,18 +117,22 @@ test.serial.cb('GET ALL TARGETS | url: /api/targets  method: get', function (t) 
 
 test.serial.cb('UPDATE A TARGET | url: /api/targets/:id  method: post', function (t) {
   const url = '/api/target/1'
-  const key = targetsDb.formatTargetKey(targetSample)
-  targetsDb.getAsync(key).then(async (result) => {
-    t.deepEqual(JSON.parse(result), targetSample, 'exisiting target sample currently unchanged')
-  })
 
   const updatedTarget = {
     ...targetSample,
-    maxAcceptsPerDay: '5'
+    maxAcceptsPerDay: '5',
+    accept: {
+      geoState: {
+        $in: ['ny', 'ca']
+      },
+      hour: {
+        $in: ['5', '6', '7']
+      }
+    }
   }
 
   servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
-    const check = JSON.parse(await targetsDb.getAsync(key))
+    const check = await targetsDb.getTarget(targetSample.id)
     t.falsy(err, 'no error')
     t.is(res.statusCode, 200, 'correct statusCode')
     t.deepEqual(check, updatedTarget, 'updated target successfully')
@@ -160,7 +168,7 @@ const testTargets = [
         $in: ['wy', 'mn']
       },
       hour: {
-        $in: ['04', '05', '11']
+        $in: ['4', '5', '11']
       }
     }
   },
@@ -174,7 +182,7 @@ const testTargets = [
         $in: ['wy']
       },
       hour: {
-        $in: ['01', '02', '03']
+        $in: ['1', '2', '3']
       }
     }
   },
@@ -188,7 +196,7 @@ const testTargets = [
         $in: ['tx']
       },
       hour: {
-        $in: ['01', '12', '03']
+        $in: ['1', '12', '3']
       }
     }
   },
@@ -202,7 +210,7 @@ const testTargets = [
         $in: ['sc']
       },
       hour: {
-        $in: ['01', '02', '03']
+        $in: ['1', '2', '3']
       }
     }
   }
@@ -211,13 +219,7 @@ const testTargets = [
 test.serial.cb('POSTING TEST TARGETS | url: /api/targets  method: post', function (t) {
   const url = '/api/targets'
   testTargets.map(target => {
-    const key = targetsDb.formatTargetKey(target)
-    servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
-      const check = JSON.parse(await targetsDb.getAsync(key))
-      t.falsy(err, 'no error')
-      t.is(res.statusCode, 200, 'correct statusCode')
-      t.assert(check.id === target.id, 'added sample target to db')
-    }).end(JSON.stringify(target))
+    servertest(server(), url, { encoding: 'json', method: 'POST' }).end(JSON.stringify(target))
   })
   t.end()
 })
@@ -262,7 +264,7 @@ test.serial.cb('ACCEPT TARGET - target with only 1 match | url: /route  method: 
   servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
     t.falsy(err, 'no error')
     t.is(res.statusCode, 200, 'correct statusCode')
-    t.is(res.body.url, 'http://wy.com', 'correct decision')
+    t.is(res.body.target.url, 'http://wy.com', 'correct decision')
     t.end()
   }).end(JSON.stringify(visitorInfo))
 })
@@ -292,7 +294,7 @@ test.serial.cb('ACCEPT TARGET WITH HIGHER VALUE | url: /route  method: post', fu
   servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
     t.falsy(err, 'no error')
     t.is(res.statusCode, 200, 'correct statusCode')
-    t.is(res.body.url, 'http://tx-higher.com', 'correct decision')
+    t.is(res.body.target.url, 'http://tx-higher.com', 'correct decision')
     t.end()
   }).end(JSON.stringify(visitorInfo))
 })
