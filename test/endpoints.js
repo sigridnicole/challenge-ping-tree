@@ -6,53 +6,6 @@ var servertest = require('servertest')
 var server = require('../lib/server')
 var targetsDb = require('../lib/targets.db')
 
-/** Mock inputs for all tests except last route url: /route method: post */
-var targetSample = {
-  id: '1',
-  url: 'http://example.com',
-  value: '0.5',
-  maxAcceptsPerDay: '3',
-  accept: {
-    geoState: {
-      $in: ['ca', 'ny']
-    },
-    hour: {
-      $in: ['13', '14', '15']
-    }
-  }
-}
-
-var multipleTargets = [
-  {
-    id: '1',
-    url: 'http://example.com',
-    value: '0.5',
-    maxAcceptsPerDay: '3',
-    accept: {
-      geoState: {
-        $in: ['ca', 'ny']
-      },
-      hour: {
-        $in: ['13', '14', '15']
-      }
-    }
-  },
-  {
-    id: '2',
-    url: 'http://example2.com',
-    value: '5',
-    maxAcceptsPerDay: '1',
-    accept: {
-      geoState: {
-        $in: ['ok', 'la']
-      },
-      hour: {
-        $in: ['1', '2', '3']
-      }
-    }
-  }
-]
-
 test.serial.cb('healthcheck', function (t) {
   var url = '/health'
   servertest(server(), url, { encoding: 'json' }, function (err, res) {
@@ -81,6 +34,21 @@ test.serial.cb('REJECT TARGET - no targets in db | url: /route  method: post', f
 
 test.serial.cb('POST A TARGET | url: /api/targets  method: post', function (t) {
   const url = '/api/targets'
+  const targetSample = {
+    id: '1',
+    url: 'http://example.com',
+    value: '0.5',
+    maxAcceptsPerDay: '3',
+    accept: {
+      geoState: {
+        $in: ['ca', 'ny']
+      },
+      hour: {
+        $in: ['13', '14', '15']
+      }
+    }
+  }
+
   servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
     const check = await targetsDb.getTarget(targetSample.id)
     t.falsy(err, 'no error')
@@ -91,33 +59,107 @@ test.serial.cb('POST A TARGET | url: /api/targets  method: post', function (t) {
 })
 
 test.serial.cb('GET A TARGET BY ID | url: /api/targets/:id  method: get', function (t) {
-  const url = '/api/target/1'
-  servertest(server(), url, { encoding: 'json' }, async function (err, res) {
+  const url = '/api/target/2'
+  const targetSample = {
+    id: '2',
+    url: 'http://example.com',
+    value: '0.5',
+    maxAcceptsPerDay: '3',
+    accept: {
+      geoState: {
+        $in: ['ca', 'ny']
+      },
+      hour: {
+        $in: ['13', '14', '15']
+      }
+    }
+  }
+  /**
+   * Neseted Servertest
+   * 1. /api/targets Post sample target
+   * 2. Get sample target
+   */
+  servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
     t.falsy(err, 'no error')
-    t.deepEqual(res.body.target, targetSample, 'returned target')
-    t.is(res.statusCode, 200, 'correct statusCode')
-    t.end()
-  })
+    servertest(server(), url, { encoding: 'json' }, async function (err, res) {
+      t.falsy(err, 'no error')
+      t.deepEqual(res.body.target, targetSample, 'returned target')
+      t.is(res.statusCode, 200, 'correct statusCode')
+      t.end()
+    })
+  }).end(JSON.stringify(targetSample))
 })
 
 test.serial.cb('GET ALL TARGETS | url: /api/targets  method: get', function (t) {
   const url = '/api/targets'
+  const multipleTargets = [
+    {
+      id: '3',
+      url: 'http://example.com',
+      value: '0.5',
+      maxAcceptsPerDay: '3',
+      accept: {
+        geoState: {
+          $in: ['ca', 'ny']
+        },
+        hour: {
+          $in: ['13', '14', '15']
+        }
+      }
+    },
+    {
+      id: '4',
+      url: 'http://example2.com',
+      value: '5',
+      maxAcceptsPerDay: '1',
+      accept: {
+        geoState: {
+          $in: ['ok', 'la']
+        },
+        hour: {
+          $in: ['1', '2', '3']
+        }
+      }
+    }
+  ]
+  /**
+   * Neseted Servertest
+   * 1. /api/targets Post sample target 1
+   * 2. /api/targets Post sample target 2
+   * 2. Assert if all targets are posted
+   */
 
-  multipleTargets.map(target => {
-    servertest(server(), url, { encoding: 'json', method: 'POST' }).end(JSON.stringify(target))
-  })
-
-  servertest(server(), url, { encoding: 'json' }, async function (err, res) {
+  servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
     t.falsy(err, 'no error')
-    t.is(res.statusCode, 200, 'correct statusCode')
-    t.assert(res.body.targets.length === 2, 'get all targets successful')
-    t.end()
-  })
+    servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
+      t.falsy(err, 'no error')
+      servertest(server(), url, { encoding: 'json' }, async function (err, res) {
+        console.log('MULTI ', res.body)
+        t.falsy(err, 'no error')
+        t.is(res.statusCode, 200, 'correct statusCode')
+        t.assert(res.body.targets.length > 2, 'get all targets successful')
+        t.end()
+      })
+    }).end(JSON.stringify(multipleTargets[1]))
+  }).end(JSON.stringify(multipleTargets[0]))
 })
 
 test.serial.cb('UPDATE A TARGET | url: /api/targets/:id  method: post', function (t) {
-  const url = '/api/target/1'
-
+  const url = '/api/target/5'
+  const targetSample = {
+    id: '5',
+    url: 'http://example.com',
+    value: '0.5',
+    maxAcceptsPerDay: '3',
+    accept: {
+      geoState: {
+        $in: ['la']
+      },
+      hour: {
+        $in: ['13', '14', '15']
+      }
+    }
+  }
   const updatedTarget = {
     ...targetSample,
     maxAcceptsPerDay: '5',
@@ -130,13 +172,22 @@ test.serial.cb('UPDATE A TARGET | url: /api/targets/:id  method: post', function
       }
     }
   }
-  servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
-    const check = await targetsDb.getTarget(targetSample.id)
+  /**
+   * Neseted Servertest
+   * 1. /api/targets Post sample target
+   * 2. Update sample target
+   * 3. Assert Update
+   */
+  servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
     t.falsy(err, 'no error')
-    t.is(res.statusCode, 200, 'correct statusCode')
-    t.deepEqual(check, updatedTarget, 'updated target successfully')
-    t.end()
-  }).end(JSON.stringify(updatedTarget))
+    servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
+      t.falsy(err, 'no error')
+      const check = await targetsDb.getTarget(targetSample.id)
+      t.is(res.statusCode, 200, 'correct statusCode')
+      t.deepEqual(check, updatedTarget, 'updated target successfully')
+      t.end()
+    }).end(JSON.stringify(updatedTarget))
+  }).end(JSON.stringify(targetSample))
 })
 
 test.serial.cb('REJECT TARGET - no targets related | url: /route  method: post', function (t) {
@@ -160,10 +211,10 @@ test.serial.cb('REJECT TARGET - target related has 0 maxAcceptsPerDay | url: /ro
     id: '1001',
     url: 'http://nd-tx.com',
     value: '5',
-    maxAcceptsPerDay: '5',
+    maxAcceptsPerDay: '0',
     accept: {
       geoState: {
-        $in: ['nd', 'tx']
+        $in: ['sc', 'tx']
       },
       hour: {
         $in: ['11', '12', '13']
@@ -276,6 +327,13 @@ test.serial.cb('ACCEPT then REJECT TARGET - testing /route twice matching with t
     }
   }
 
+  /**
+   * Nested servertests
+   * 1. /api/targets Post the test target
+   * 2. /route Make decision, accept
+   * 3. /route Make decision, reject, since target's maxAcceptsPerDay is only 1
+   */
+
   servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
     t.falsy(err, 'no error')
     servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
@@ -321,8 +379,8 @@ test.serial.cb('ACCEPT TARGET | NEW DAY- testing with previous test input and a 
    * Nested servertests
    * 1. /api/targets Post the target with max 1 accept per day
    * 2. /route Make decision, accepted
-   * 3. /route Make decision, rejected
-   * 4. Simulate date change
+   * 3. /route Make decision, rejected since target has max 1 accept per day only
+   * 4. Simulate date change, reset target accept counts
    * 3. /route Make decision, accepted
    */
   servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
@@ -387,6 +445,13 @@ test.serial.cb('ACCEPT TARGET WITH HIGHER VALUE | url: /route  method: post', fu
       }
     }
   ]
+
+  /**
+   * Nested servertests
+   * 1. /api/targets Post the test target 1
+   * 2. /api/targets Post the test target 2
+   * 3. /route Make decision, accept target with higher value
+   */
 
   servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
     t.falsy(err, 'no error')
