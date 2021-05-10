@@ -284,6 +284,31 @@ test.serial.cb('REJECT TARGET - testing with previous test input, since target h
   }).end(JSON.stringify(visitorInfo))
 })
 
+test.serial.cb('ACCEPT TARGET | NEW DAY- testing with previous test input and a day has passed, accept target counts should be reinitialized | url: /route  method: post', function (t) {
+  const redis = require('../lib/redis')
+  const { promisify } = require('util')
+  const hset = promisify(redis.hset).bind(redis)
+
+  // Simulating a different date by direct update to targetsTraffic
+  hset('targetsTraffic', '1002', JSON.stringify({
+    count: 0,
+    date: 'Sun March 9 2021'
+  })).then(() => {
+    const url = '/route'
+    const visitorInfo = {
+      geoState: 'wy',
+      publisher: 'abc',
+      timestamp: '2018-07-19T03:28:59.513Z'
+    }
+    servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
+      t.falsy(err, 'no error')
+      t.is(res.statusCode, 200, 'correct statusCode')
+      t.is(res.body.decision, 'accept', 'correct decision')
+      t.end()
+    }).end(JSON.stringify(visitorInfo))
+  })
+})
+
 test.serial.cb('ACCEPT TARGET WITH HIGHER VALUE | url: /route  method: post', function (t) {
   const url = '/route'
   const visitorInfo = {
