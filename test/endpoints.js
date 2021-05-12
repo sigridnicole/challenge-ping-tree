@@ -466,3 +466,68 @@ test.serial.cb('ACCEPT TARGET WITH HIGHER VALUE | url: /route  method: post', fu
     }).end(JSON.stringify(testTarget[1]))
   }).end(JSON.stringify(testTarget[0]))
 })
+
+test.serial.cb('System test, system should not break when random/wrong parameters', function (t) {
+  const url = '/route'
+  const visitorInfo = {
+    geoState: 'randomthing',
+    publisher: 'aaaaaaaaaaaaaaaaaaa',
+    timestamp: 'aaaaa'
+  }
+
+  const testTarget = {
+    id: '1006',
+    maxValue: '5',
+    reject: {
+      geoState: {
+        $in: ['ks']
+      },
+      hour: {
+        $in: ['11', '12', '13']
+      }
+    }
+  }
+
+  /**
+   * Nested servertests
+   * 1. /api/targets Post the test target 1
+   * 2. /api/targets Post the test target 2
+   * 3. /route Make decision, accept target with higher value
+   */
+
+  servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
+    t.falsy(err, 'no error')
+    servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
+      t.falsy(err, 'no error')
+      t.is(res.statusCode, 200, 'correct statusCode')
+      t.is(res.body.decision, 'reject', 'correct decision')
+      t.end()
+    }).end(JSON.stringify(visitorInfo))
+  }).end(JSON.stringify(testTarget))
+})
+
+test.serial.cb('System test, system should not break with empty', function (t) {
+  const url = '/route'
+  const visitorInfo = {
+  }
+
+  const testTarget = {
+  }
+
+  /**
+   * Nested servertests
+   * 1. /api/targets Post the test target 1
+   * 2. /api/targets Post the test target 2
+   * 3. /route Make decision, accept target with higher value
+   */
+
+  servertest(server(), '/api/targets', { encoding: 'json', method: 'POST' }, async function (err, res) {
+    t.falsy(err, 'no error')
+    servertest(server(), url, { encoding: 'json', method: 'POST' }, async function (err, res) {
+      t.falsy(err, 'no error')
+      t.is(res.statusCode, 200, 'correct statusCode')
+      t.is(res.body.decision, 'reject', 'correct decision')
+      t.end()
+    }).end(JSON.stringify(visitorInfo))
+  }).end(JSON.stringify(testTarget))
+})
